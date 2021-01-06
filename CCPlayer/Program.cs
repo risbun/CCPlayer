@@ -7,7 +7,9 @@ namespace CCPlayer
     {
         static void Main(string[] args)
         {
-            var server = new Fleck.WebSocketServer("ws://0.0.0.0:6969");
+            new AudioConvert();
+            /*
+            var server = new WebSocketServer("ws://0.0.0.0:6969");
             server.Start(socket =>
             {
                 socket.OnOpen = () => OnConnected(socket);
@@ -19,6 +21,7 @@ namespace CCPlayer
             {
                 command = Console.ReadLine();
             }
+            */
         }
 
         private static void OnReceive(IWebSocketConnection socket, string msg)
