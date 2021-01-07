@@ -10,7 +10,7 @@ using Fleck;
 using System.Windows.Forms;
 using Ionic.Zlib;
 using NAudio.Wave;
-using java.io;
+//using java.io;
 using Console = System.Console;
 
 namespace CCPlayer
@@ -230,7 +230,7 @@ namespace CCPlayer
             var outFormat = new WaveFormat(48000, 8, 1);
             var reader = new MediaFoundationResampler(raw, outFormat);
 
-            BufferedOutputStream outFile = new BufferedOutputStream(new FileOutputStream(outfile));
+            List<byte> outFile = new List<byte>();
 
             byte[] readBuffer = new byte[1024];
             byte[] outBuffer = new byte[readBuffer.Length / 8];
@@ -248,9 +248,10 @@ namespace CCPlayer
                 read &= ~0x07;
                 CCS.AudioCompress(outBuffer, readBuffer, 0, 0, read / 8);
 
-                outFile.write(outBuffer, 0, read / 8);
+                outFile.AddRange(outBuffer);
             } while (read == readBuffer.Length);
-            outFile.close();
+
+            File.WriteAllBytes(outfile, outFile.ToArray());
         }
     }
 }
