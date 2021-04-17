@@ -10,8 +10,8 @@ using Fleck;
 using System.Windows.Forms;
 using Ionic.Zlib;
 using NAudio.Wave;
-//using java.io;
 using Console = System.Console;
+using System.Net;
 
 namespace CCPlayer
 {
@@ -135,7 +135,7 @@ namespace CCPlayer
             gfxScreenshot.Dispose();
             return screenshot;
         }
-        public ScreenshotConvert(string[] split, IWebSocketConnection socket)
+        public void OldScreenshotConvert(string[] split, IWebSocketConnection socket)
         {
 
             int width = int.Parse(split[1]);
@@ -170,20 +170,149 @@ namespace CCPlayer
                 Cv2.WaitKey(1);
             }
         }
+
+        public ScreenshotConvert(IWebSocketConnection socket)
+        {
+            //82 width, 41 height default
+            int width = 82 * 3;
+            int height = 41 * 3;
+            socket.Send($"{width},{height}");
+
+            ComputerCraftStuff CCS = new ComputerCraftStuff();
+
+            int i = 0;
+            while (i < 4000)
+            {
+                if (!socket.IsAvailable) break;
+                i++;
+                Mat image = BitmapConverter.ToMat(makeScreenshot());
+
+                var arr = new List<byte>();
+                var resized = image.Resize(new OpenCvSharp.Size(width, height), 0, 0, InterpolationFlags.Nearest);
+                
+
+                Mat outimg = new Mat();
+                Kmeans(resized, outimg, 16);
+
+                var indexer = new Mat<Vec3b>(outimg).GetIndexer();
+
+                Dictionary<Vec3b, char> colores = new Dictionary<Vec3b, char>();
+
+                for (int x = 0; x < height; x += 1)
+                {
+                    for (int y = 0; y < width; y += 1)
+                    {
+                        Vec3b felcolor = indexer[x, y]; // BGR
+                        Vec3b color = new Vec3b(felcolor.Item2, felcolor.Item1, felcolor.Item0);
+
+                        if (!colores.ContainsKey(color))
+                        {
+                            colores.Add(color, colores.Count.ToString("x")[0]);
+                        }
+
+                        arr.Add(Convert.ToByte(colores[color]));
+                    }
+                }
+                byte[] compressed = CCS.compress(arr.ToArray());
+
+                string palette = "";
+                foreach (KeyValuePair<Vec3b, char> entry in colores)
+                {
+                    string hex = entry.Key.Item0.ToString("x2") + entry.Key.Item1.ToString("x2") + entry.Key.Item2.ToString("x2");
+                    palette += hex + ",";
+                }
+
+                socket.Send(compressed);
+                //socket.Send(arr.ToArray());
+                socket.Send(palette.Substring(0, palette.Length - 1));
+                
+                Cv2.WaitKey(24);
+            }
+        }
+
+        public static void Kmeans(Mat input, Mat output, int k)
+        {
+            using (Mat points = new Mat())
+            {
+                using (Mat labels = new Mat())
+                {
+                    using (Mat centers = new Mat())
+                    {
+                        int width = input.Cols;
+                        int height = input.Rows;
+
+                        points.Create(width * height, 1, MatType.CV_32FC3);
+                        centers.Create(k, 1, points.Type());
+                        output.Create(height, width, input.Type());
+
+                        // Input Image Data
+                        int i = 0;
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++, i++)
+                            {
+                                Vec3f vec3f = new Vec3f
+                                {
+                                    Item0 = input.At<Vec3b>(y, x).Item0,
+                                    Item1 = input.At<Vec3b>(y, x).Item1,
+                                    Item2 = input.At<Vec3b>(y, x).Item2
+                                };
+
+                                points.Set(i, vec3f);
+                            }
+                        }
+
+                        // Criteria:
+                        // – Stop the algorithm iteration if specified accuracy, epsilon, is reached.
+                        // – Stop the algorithm after the specified number of iterations, MaxIter.
+                        var criteria = new TermCriteria(type: CriteriaType.Eps | CriteriaType.MaxIter, maxCount: 10, epsilon: 1.0);
+
+                        // Finds centers of clusters and groups input samples around the clusters.
+                        Cv2.Kmeans(data: points, k: k, bestLabels: labels, criteria: criteria, attempts: 3, flags: KMeansFlags.PpCenters, centers: centers);
+
+                        // Output Image Data
+                        i = 0;
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++, i++)
+                            {
+                                int index = labels.Get<int>(i);
+
+                                Vec3b vec3b = new Vec3b();
+
+                                int firstComponent = Convert.ToInt32(Math.Round(centers.At<Vec3f>(index).Item0));
+                                firstComponent = firstComponent > 255 ? 255 : firstComponent < 0 ? 0 : firstComponent;
+                                vec3b.Item0 = Convert.ToByte(firstComponent);
+
+                                int secondComponent = Convert.ToInt32(Math.Round(centers.At<Vec3f>(index).Item1));
+                                secondComponent = secondComponent > 255 ? 255 : secondComponent < 0 ? 0 : secondComponent;
+                                vec3b.Item1 = Convert.ToByte(secondComponent);
+
+                                int thirdComponent = Convert.ToInt32(Math.Round(centers.At<Vec3f>(index).Item2));
+                                thirdComponent = thirdComponent > 255 ? 255 : thirdComponent < 0 ? 0 : thirdComponent;
+                                vec3b.Item2 = Convert.ToByte(thirdComponent);
+
+                                output.Set(y, x, vec3b);
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     class VideoConvert
     {
         public VideoConvert(string[] split, IWebSocketConnection socket)
         {
             VideoCapture capture = new VideoCapture("./vidoe.mp4");
-            int width = int.Parse(split[1]);
-            int height = int.Parse(split[2]);
+            int width = 64;
+            int height = 64;
 
             ComputerCraftStuff CCS = new ComputerCraftStuff();
             Dictionary<Color, char> colors = CCS.colors;
 
             int i = 0;
-            using (Mat image = new Mat())
+            using (Mat image = new Mat("./test.png"))
             {
                 while (true)
                 {
@@ -252,6 +381,137 @@ namespace CCPlayer
             } while (read == readBuffer.Length);
 
             File.WriteAllBytes(outfile, outFile.ToArray());
+        }
+    }
+
+    class ImageConvert
+    {
+        public ImageConvert(IWebSocketConnection socket, string url)
+        {
+            int width = 82;
+            int height = 42;
+            socket.Send($"{width},{height}");
+
+            ComputerCraftStuff CCS = new ComputerCraftStuff();
+
+            using (WebClient webClient = new WebClient())
+            {
+                byte[] dataArr = webClient.DownloadData(url);
+                File.WriteAllBytes(@"path.png", dataArr);
+            }
+
+            Mat image = new Mat("path.png");
+            var resized = image.Resize(new OpenCvSharp.Size(width, height), 0, 0, InterpolationFlags.Nearest);
+
+            var arr = new List<byte>();
+
+            Mat outimg = new Mat();
+            Kmeans(resized, outimg, 16);
+            
+
+            Dictionary<Vec3b, char> colores = new Dictionary<Vec3b, char>();
+
+            var indexer = new Mat<Vec3b>(outimg).GetIndexer();
+            for (byte x = 0; x < height; x += 1)
+            {
+                for (byte y = 0; y < width; y += 1)
+                {
+                    Vec3b color = indexer[x, y]; // BGR
+
+                    if (!colores.ContainsKey(color))
+                    {
+                        int lmao = colores.Count;
+                        char hexValue = lmao.ToString("X").ToLower().ToCharArray()[0];
+                        colores.Add(color, hexValue);
+                    }
+
+                    arr.Add(Convert.ToByte(colores[color]));
+                }
+            }
+
+            byte[] compressed = CCS.compress(arr.ToArray()); 
+            Console.WriteLine(arr.Count + " -> " + compressed.Length);
+
+
+            string palette = "";
+            foreach (KeyValuePair<Vec3b, char> entry in colores)
+            {
+                string hex = entry.Key.Item0.ToString("X2") + entry.Key.Item1.ToString("X2") + entry.Key.Item2.ToString("X2");
+                palette += hex + ",";
+            }
+
+            socket.Send(width + "|" + palette.Substring(0, palette.Length - 1));
+            socket.Send(compressed);
+        }
+
+        public static void Kmeans(Mat input, Mat output, int k)
+        {
+            using (Mat points = new Mat())
+            {
+                using (Mat labels = new Mat())
+                {
+                    using (Mat centers = new Mat())
+                    {
+                        int width = input.Cols;
+                        int height = input.Rows;
+
+                        points.Create(width * height, 1, MatType.CV_32FC3);
+                        centers.Create(k, 1, points.Type());
+                        output.Create(height, width, input.Type());
+
+                        // Input Image Data
+                        int i = 0;
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++, i++)
+                            {
+                                Vec3f vec3f = new Vec3f
+                                {
+                                    Item0 = input.At<Vec3b>(y, x).Item0,
+                                    Item1 = input.At<Vec3b>(y, x).Item1,
+                                    Item2 = input.At<Vec3b>(y, x).Item2
+                                };
+
+                                points.Set<Vec3f>(i, vec3f);
+                            }
+                        }
+
+                        // Criteria:
+                        // – Stop the algorithm iteration if specified accuracy, epsilon, is reached.
+                        // – Stop the algorithm after the specified number of iterations, MaxIter.
+                        var criteria = new TermCriteria(type: CriteriaType.Eps | CriteriaType.MaxIter, maxCount: 10, epsilon: 1.0);
+
+                        // Finds centers of clusters and groups input samples around the clusters.
+                        Cv2.Kmeans(data: points, k: k, bestLabels: labels, criteria: criteria, attempts: 3, flags: KMeansFlags.PpCenters, centers: centers);
+
+                        // Output Image Data
+                        i = 0;
+                        for (int y = 0; y < height; y++)
+                        {
+                            for (int x = 0; x < width; x++, i++)
+                            {
+                                int index = labels.Get<int>(i);
+
+                                Vec3b vec3b = new Vec3b();
+
+                                int firstComponent = Convert.ToInt32(Math.Round(centers.At<Vec3f>(index).Item0));
+                                firstComponent = firstComponent > 255 ? 255 : firstComponent < 0 ? 0 : firstComponent;
+                                vec3b.Item0 = Convert.ToByte(firstComponent);
+
+                                int secondComponent = Convert.ToInt32(Math.Round(centers.At<Vec3f>(index).Item1));
+                                secondComponent = secondComponent > 255 ? 255 : secondComponent < 0 ? 0 : secondComponent;
+                                vec3b.Item1 = Convert.ToByte(secondComponent);
+
+                                int thirdComponent = Convert.ToInt32(Math.Round(centers.At<Vec3f>(index).Item2));
+                                thirdComponent = thirdComponent > 255 ? 255 : thirdComponent < 0 ? 0 : thirdComponent;
+                                vec3b.Item2 = Convert.ToByte(thirdComponent);
+
+                                output.Set(y, x, vec3b);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

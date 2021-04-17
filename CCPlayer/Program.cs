@@ -7,8 +7,6 @@ namespace CCPlayer
     {
         static void Main(string[] args)
         {
-            new AudioConvert();
-            /*
             var server = new WebSocketServer("ws://0.0.0.0:6969");
             server.Start(socket =>
             {
@@ -21,7 +19,6 @@ namespace CCPlayer
             {
                 command = Console.ReadLine();
             }
-            */
         }
 
         private static void OnReceive(IWebSocketConnection socket, string msg)
@@ -33,18 +30,27 @@ namespace CCPlayer
             Console.Write($"] {socket.GetHashCode()} \n");
             Console.WriteLine(msg);
 
+            if (msg == "")
+                socket.Close();
+
             String[] split = msg.Split(',');
             if (split[0] == "video")
             {
                 new VideoConvert(split, socket);
             }
-            /*else if (split[0] == "audio")
+            /*
+            else if (split[0] == "audio")
             {
                 new AudioConvert(split, context);
-            }*/
+            }
+            */
             else if (split[0] == "screenshot")
             {
-                new ScreenshotConvert(split, socket);
+                new ScreenshotConvert(socket);
+            }
+            else if (split[0] == "image")
+            {
+                new ImageConvert(socket, split[1]);
             }
         }
 
