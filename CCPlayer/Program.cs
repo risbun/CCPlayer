@@ -23,53 +23,34 @@ namespace CCPlayer
 
         private static void OnReceive(IWebSocketConnection socket, string msg)
         {
-            Console.Write("[");
-            Console.ForegroundColor = ConsoleColor.Cyan;
-            Console.Write(">");
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write($"] {socket.GetHashCode()} \n");
             Console.WriteLine(msg);
 
             if (msg == "")
                 socket.Close();
 
             String[] split = msg.Split(',');
-            if (split[0] == "video")
+            switch (split[0])
             {
-                new VideoConvert(split, socket);
-            }
-            /*
-            else if (split[0] == "audio")
-            {
-                new AudioConvert(split, context);
-            }
-            */
-            else if (split[0] == "screenshot")
-            {
-                new ScreenshotConvert(socket);
-            }
-            else if (split[0] == "image")
-            {
-                new ImageConvert(socket, split[1]);
+                case "video":
+                    new VideoConvert(split, socket);
+                    break;
+                case "screenshot":
+                    new ScreenshotConvert(socket);
+                    break;
+                case "image":
+                    new ImageConvert(socket, split[1]);
+                    break;
             }
         }
 
         private static void OnDisconnect(IWebSocketConnection socket)
         {
-            Console.Write("[");
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.Write("-");
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write($"] {socket.GetHashCode()} \n");
+            Console.WriteLine($"< {socket.GetHashCode()}");
         }
 
         static void OnConnected(IWebSocketConnection socket)
         {
-            Console.Write("[");
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.Write("+");
-            Console.ForegroundColor = ConsoleColor.White;
-            Console.Write($"] {socket.GetHashCode()} \n");
+            Console.WriteLine($"> {socket.GetHashCode()}");
         }
 	}
 }
