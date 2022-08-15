@@ -7,7 +7,7 @@ namespace CCPlayer
     {
         static void Main(string[] args)
         {
-            var server = new WebSocketServer("ws://0.0.0.0:6969");
+            var server = new WebSocketServer("ws://0.0.0.0:51413");
             server.Start(socket =>
             {
                 socket.OnOpen = () => OnConnected(socket);

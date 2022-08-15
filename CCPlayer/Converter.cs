@@ -12,6 +12,7 @@ using Ionic.Zlib;
 using NAudio.Wave;
 using Console = System.Console;
 using System.Net;
+using System.Text;
 
 namespace CCPlayer
 {
@@ -176,6 +177,7 @@ namespace CCPlayer
             //82 width, 41 height default
             int width = 82 * 3;
             int height = 41 * 3;
+            
             socket.Send($"{width},{height}");
 
             ComputerCraftStuff CCS = new ComputerCraftStuff();
@@ -192,6 +194,9 @@ namespace CCPlayer
                 
 
                 Mat outimg = new Mat();
+                
+                
+                
                 Kmeans(resized, outimg, 16);
 
                 var indexer = new Mat<Vec3b>(outimg).GetIndexer();
@@ -213,23 +218,32 @@ namespace CCPlayer
                         arr.Add(Convert.ToByte(colores[color]));
                     }
                 }
-                byte[] compressed = CCS.compress(arr.ToArray());
+                
 
-                string palette = "";
+                var palette = "";
                 foreach (KeyValuePair<Vec3b, char> entry in colores)
                 {
                     string hex = entry.Key.Item0.ToString("x2") + entry.Key.Item1.ToString("x2") + entry.Key.Item2.ToString("x2");
-                    palette += hex + ",";
+                    palette += hex;
                 }
 
+                var textBytes = Encoding.UTF8.GetBytes(palette.Substring(0, palette.Length - 1));
+                
+                var bytes = new List<byte>();
+                bytes.AddRange(textBytes);
+                bytes.AddRange(arr);
+                
+                byte[] compressed = CCS.compress(bytes.ToArray());
                 socket.Send(compressed);
                 //socket.Send(arr.ToArray());
-                socket.Send(palette.Substring(0, palette.Length - 1));
+                
                 
                 Cv2.WaitKey(24);
             }
         }
 
+        
+        
         public static void Kmeans(Mat input, Mat output, int k)
         {
             using (Mat points = new Mat())
@@ -265,7 +279,7 @@ namespace CCPlayer
                         // Criteria:
                         // – Stop the algorithm iteration if specified accuracy, epsilon, is reached.
                         // – Stop the algorithm after the specified number of iterations, MaxIter.
-                        var criteria = new TermCriteria(type: CriteriaType.Eps | CriteriaType.MaxIter, maxCount: 10, epsilon: 1.0);
+                        var criteria = new TermCriteria(type: CriteriaTypes.Eps | CriteriaTypes.MaxIter, maxCount: 10, epsilon: 1.0);
 
                         // Finds centers of clusters and groups input samples around the clusters.
                         Cv2.Kmeans(data: points, k: k, bestLabels: labels, criteria: criteria, attempts: 3, flags: KMeansFlags.PpCenters, centers: centers);
@@ -444,6 +458,8 @@ namespace CCPlayer
             socket.Send(compressed);
         }
 
+        
+        
         public static void Kmeans(Mat input, Mat output, int k)
         {
             using (Mat points = new Mat())
@@ -472,17 +488,19 @@ namespace CCPlayer
                                     Item2 = input.At<Vec3b>(y, x).Item2
                                 };
 
-                                points.Set<Vec3f>(i, vec3f);
+                                points.Set(i, vec3f);
                             }
                         }
 
                         // Criteria:
                         // – Stop the algorithm iteration if specified accuracy, epsilon, is reached.
                         // – Stop the algorithm after the specified number of iterations, MaxIter.
-                        var criteria = new TermCriteria(type: CriteriaType.Eps | CriteriaType.MaxIter, maxCount: 10, epsilon: 1.0);
+                        
+                        
+                        var criteria = new TermCriteria(CriteriaTypes.Eps | CriteriaTypes.MaxIter, 1, 1.0);
 
                         // Finds centers of clusters and groups input samples around the clusters.
-                        Cv2.Kmeans(data: points, k: k, bestLabels: labels, criteria: criteria, attempts: 3, flags: KMeansFlags.PpCenters, centers: centers);
+                        Cv2.Kmeans(points, k, labels, criteria, 1, KMeansFlags.PpCenters, centers);
 
                         // Output Image Data
                         i = 0;
